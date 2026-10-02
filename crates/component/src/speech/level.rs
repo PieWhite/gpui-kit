@@ -2,12 +2,13 @@ use std::{collections::VecDeque, time::Duration};
 
 use instant::Instant;
 
-/// How much audio one level covers: short enough for the bars to follow
-/// syllables.
-pub(super) const LEVEL_INTERVAL: Duration = Duration::from_millis(25);
+/// How much audio one level covers, and so how often the waveform takes a
+/// step: about the pace of a syllable, so the bars follow speech without
+/// racing past.
+pub(super) const LEVEL_INTERVAL: Duration = Duration::from_millis(80);
 
-/// How many recent levels are kept: enough to fill a wide waveform (about six
-/// seconds of audio).
+/// How many recent levels are kept: enough to fill a wide waveform (about
+/// twenty seconds of audio).
 pub(super) const LEVEL_HISTORY: usize = 256;
 
 /// Raw levels below this are background noise and read as silence, so a quiet
@@ -128,18 +129,20 @@ mod tests {
     fn one_level_per_interval_across_pushes() {
         let mut meter = LevelMeter::new();
         meter.reset(16_000, 1);
-        // 25 ms at 16 kHz is 400 samples; feed 1 000 samples in uneven pushes.
-        assert!(!meter.push(&tone(1_000, 150)));
-        assert!(meter.push(&tone(1_000, 300)));
-        assert!(meter.push(&tone(1_000, 550)));
+        // Two and a half levels' worth of audio in uneven pushes.
+        let window = window_for(16_000, 1);
+        assert!(!meter.push(&tone(1_000, window / 3)));
+        assert!(meter.push(&tone(1_000, window)));
+        assert!(meter.push(&tone(1_000, window + window / 6)));
         assert_eq!(meter.levels().len(), 2);
         assert!(meter.last_level_at().is_some());
     }
 
     #[test]
     fn the_window_follows_the_stream_format() {
-        assert_eq!(window_for(16_000, 1), 400);
-        assert_eq!(window_for(48_000, 2), 2_400);
+        // 80 ms of 16 kHz mono, and of 48 kHz stereo.
+        assert_eq!(window_for(16_000, 1), 1_280);
+        assert_eq!(window_for(48_000, 2), 7_680);
     }
 
     #[test]
@@ -156,7 +159,7 @@ mod tests {
         let mut meter = LevelMeter::new();
         meter.reset(16_000, 1);
         // -60 dBFS: below the -50 dB floor of the scale.
-        meter.push(&tone(32, 400));
+        meter.push(&tone(32, window_for(16_000, 1)));
         assert_eq!(meter.levels().next(), Some(0.));
     }
 
@@ -172,7 +175,7 @@ mod tests {
     fn history_is_bounded() {
         let mut meter = LevelMeter::new();
         meter.reset(16_000, 1);
-        meter.push(&tone(8_000, 400 * (LEVEL_HISTORY + 10)));
+        meter.push(&tone(8_000, window_for(16_000, 1) * (LEVEL_HISTORY + 10)));
         assert_eq!(meter.levels().len(), LEVEL_HISTORY);
     }
 }
