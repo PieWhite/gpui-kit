@@ -172,8 +172,10 @@ impl SpeechState {
         self.meter.levels()
     }
 
-    pub(super) fn last_level_at(&self) -> Option<instant::Instant> {
-        self.meter.last_level_at()
+    /// How far past the waveform's trailing edge the newest level sits at
+    /// `now`, in levels; see `LevelMeter::lead_at`.
+    pub(super) fn level_lead_at(&self, now: instant::Instant) -> Option<f32> {
+        self.meter.lead_at(now)
     }
 
     /// Start a session. Does nothing while one is running.
