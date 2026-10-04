@@ -690,9 +690,6 @@ mod tests {
         assert_eq!(Language::from_str("unknown"), Language::Plain);
     }
 
-    /// `SyntaxHighlighter::new` falls back to plain text when a language's queries don't compile
-    /// against its grammar, so a mismatch would otherwise only show as a language that is never
-    /// highlighted.
     #[test]
     fn test_every_language_query_compiles() {
         let failures: Vec<String> = Language::all()
