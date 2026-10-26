@@ -38,6 +38,8 @@ If the application already calls `gpui_kit::component::init`, Base initializatio
 
 TextView is selectable by default. While dragging a selection near a viewport edge, the shared selection layer scrolls the related `overflow_*_scroll` region automatically; no TextView scroll or selection parameter is required. Use `.selectable(false)` only to disable selection explicitly.
 
+A drag that starts in a table cell selects only in that cell; when the pointer leaves the cell, the selection stops at its edge. A drag that starts outside the table selects through it. Use `table_actions` to offer a copy of the whole table.
+
 ## Markdown and HTML
 
 Use the helpers for call-site-derived IDs, or constructors when an explicit stable ID is useful:
@@ -324,3 +326,51 @@ UTF-16 conversion for native input, accessibility integration and virtualization
 The current byte-index geometry does not represent bidirectional caret affinity
 or both sides of a soft-wrap boundary; do not treat it as a complete visual
 navigation API.
+
+## Linked plain text
+
+`TextViewState::linked_text(text, links, cx)` creates selectable plain text with
+explicit `TextViewLink::new(range, url)` spans. Ranges are UTF-8 byte offsets,
+ordered and non-overlapping; invalid ranges are ignored. Use
+`set_linked_text(text, links, cx)` to replace both together. `range()` and `url()`
+inspect a link. Render the retained state with `TextView::new(&state)` and use
+`on_link_click` to override URL opening.
+
+`TextView::link_underline(bool)` and `link_underline_on_hover(bool)` override
+link appearance after theme resolution. The equivalent Base style builders are
+`TextViewStyle::with_link_underline` and `with_link_underline_on_hover`, with
+`is_link_underlined()` and `is_link_underlined_on_hover()` readers. Defaults are
+`true` at rest and `false` on hover.
+
+## Inline code style
+
+`TextView::inline_code_style(StyleRefinement)` refines inline code after the
+resolved theme/style and surface-color adaptation. Unspecified properties
+keep their defaults, and explicit colors remain unchanged on inverted surfaces.
+The Base style also exposes `TextViewStyle::with_inline_code_style` and the
+`inline_code_style()` reader. Existing `with_inline_code(HighlightStyle)`
+continues to work; the new refinement takes precedence.
+
+```rust
+use gpui_kit::{StyleRefinement, Styled as _, rems};
+
+let border = gpui_kit::base::Theme::global(cx).tokens.colors.border;
+
+TextView::markdown("notes", "Run `cargo build` first.")
+    .inline_code_style(
+        StyleRefinement::default()
+            .text_size(rems(1.))
+            .px(rems(0.25))
+            .border_1()
+            .border_color(border),
+    )
+```
+
+Supported properties are font family, size, features, fallbacks, weight,
+italic, color, underline, strikethrough, background, border widths/color/style,
+corner radii, and padding. Font sizes use pixels or window-relative rems;
+non-finite or non-positive sizes retain the default. Without a font-size override,
+code remains 0.875 times its surrounding text. Without a border override, code
+has no border. Padding and border widths participate in wrapping and table
+measurement. Margin, positioning, flex, explicit box size, overflow, and
+interaction properties are not used; line height remains owned by the paragraph.

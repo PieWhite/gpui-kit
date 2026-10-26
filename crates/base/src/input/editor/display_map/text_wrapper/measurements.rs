@@ -43,7 +43,7 @@ impl WidthMeasurements {
         width
     }
 
-    /// Text/font/indent/inline updates delimit reuse; no old rendering configuration survives.
+    /// Text/font/tab-size/indent/inline updates delimit reuse; old measurements cannot survive.
     pub(super) fn clear(&mut self) {
         self.widths.clear();
         self.order.clear();
