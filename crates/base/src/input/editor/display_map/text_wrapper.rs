@@ -145,17 +145,27 @@ fn measured_wrap(
         };
         // Probe legal word breaks first. Character-fit changes inside the same word do not
         // change the result, so they must not invalidate a cached line during a divider drag.
-        // Exponential probing still avoids measuring a huge remaining suffix on every row.
-        let mut fitting = |candidates: &[usize]| {
-            let mut low = 0;
-            let mut high = 1;
-            while high <= candidates.len()
-                && valid_widths.fits(
-                    measure(&text[start..candidates[high - 1]]),
+        // Bound word probes before shaping: a single word can span the entire remaining line.
+        // Beyond this local window, use the original exponential grapheme search instead.
+        const MAX_WORD_PROBE_GRAPHEMES: usize = 256;
+        let word_probe_end = ends[first..]
+            .get(MAX_WORD_PROBE_GRAPHEMES - 1)
+            .copied()
+            .unwrap_or(text.len());
+        let mut fitting = |candidates: &[usize], limit: Option<usize>| {
+            let mut fits = |end| {
+                if limit.is_some_and(|limit| end > limit) {
+                    return None;
+                }
+                Some(valid_widths.fits(
+                    measure(&text[start..end]),
                     available,
                     if start == 0 { px(0.) } else { indent_width },
-                )
-            {
+                ))
+            };
+            let mut low = 0;
+            let mut high = 1;
+            while high <= candidates.len() && fits(candidates[high - 1])? {
                 low = high;
                 if high == candidates.len() {
                     break;
@@ -164,32 +174,34 @@ fn measured_wrap(
             }
             while low + 1 < high {
                 let mid = (low + high) / 2;
-                if valid_widths.fits(
-                    measure(&text[start..candidates[mid - 1]]),
-                    available,
-                    if start == 0 { px(0.) } else { indent_width },
-                ) {
+                if fits(candidates[mid - 1])? {
                     low = mid;
                 } else {
                     high = mid;
                 }
             }
-            low
+            Some(low)
         };
         let first_word =
             opportunities.partition_point(|&ix| ix <= start || (start == 0 && ix <= indent));
         let words = &opportunities[first_word..];
-        let word_count = fitting(words);
-        let end = if word_count > 0 {
+        let end = if let Some(word_count) = fitting(words, Some(word_probe_end))
+            && word_count > 0
+        {
             words[word_count - 1]
         } else {
             // An oversized word retains the original complete-grapheme fallback. At least one
             // grapheme is consumed even when it is wider than the available viewport.
-            let last = words.first().map_or(ends.len(), |&word_end| {
-                ends.partition_point(|&ix| ix <= word_end)
-            });
-            let count = fitting(&ends[first..last]);
-            ends[first + count.max(1) - 1]
+            let count = fitting(&ends[first..], None).unwrap();
+            let fitting_end = ends[first + count.max(1) - 1];
+            if fitting_end == text.len() {
+                break;
+            }
+            let word_count = words.partition_point(|&ix| ix <= fitting_end);
+            word_count
+                .checked_sub(1)
+                .map(|ix| words[ix])
+                .unwrap_or(fitting_end)
         };
         if end == text.len() {
             break;

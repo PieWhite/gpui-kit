@@ -52,6 +52,39 @@ fn resize(wrapper: &mut TextWrapper, text: &Rope, width: Pixels, reuse: bool) ->
 }
 
 #[test]
+fn oversized_words_keep_measurement_work_local() {
+    for length in [8192, 16_384] {
+        for prefix in ["", "short ", "    "] {
+            let text = format!("{prefix}{}", "x".repeat(length));
+            for indent in [WrappingIndent::None, WrappingIndent::Same] {
+                for width in [80., 256., 512.] {
+                    let mut measured_bytes = 0;
+                    let mut longest_probe = 0;
+                    let measured = measured_wrap(&text, px(width), indent, |part| {
+                        measured_bytes += part.len();
+                        longest_probe = longest_probe.max(part.len());
+                        px(part.len() as f32)
+                    });
+                    let original = measured_wrap_boundaries(&text, px(width), indent, |part| {
+                        px(part.len() as f32)
+                    });
+                    assert_eq!(measured.boundaries, original);
+                    assert!(
+                        longest_probe <= 4 * width as usize,
+                        "a {width}-pixel row measured a {longest_probe}-byte suffix"
+                    );
+                    assert!(
+                        measured_bytes <= 32 * text.len(),
+                        "{} bytes required {measured_bytes} bytes of shaping",
+                        text.len()
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn cached_resize_matches_cold_unicode_wrapping_at_fractional_thresholds() {
     let text = Rope::from(
         "    alphabet 中文😀 e\u{301} family 👨‍👩‍👧‍👦 finish\n\tfi ffi office\nمرحبا بالعالم\n\r\nend",
