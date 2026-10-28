@@ -28,24 +28,19 @@ pub(super) fn list_item_prefix(
             return format!("{ordinal}. ");
         }
 
-        let alpha_ix = ordinal.saturating_sub(1) as usize;
-        if depth == 1 {
-            return format!(
-                "{}. ",
-                NUMBERED_PREFIXES_1
-                    .chars()
-                    .nth(alpha_ix % NUMBERED_PREFIXES_1.len())
-                    .unwrap()
-            );
+        let alphabet = if depth == 1 {
+            NUMBERED_PREFIXES_1
         } else {
-            return format!(
-                "{}. ",
-                NUMBERED_PREFIXES_2
-                    .chars()
-                    .nth(alpha_ix % NUMBERED_PREFIXES_2.len())
-                    .unwrap()
-            );
+            NUMBERED_PREFIXES_2
+        };
+        let mut ordinal = ordinal;
+        let mut prefix = String::new();
+        while ordinal > 0 {
+            ordinal -= 1;
+            prefix.insert(0, alphabet.as_bytes()[(ordinal % 26) as usize] as char);
+            ordinal /= 26;
         }
+        return format!("{prefix}. ");
     } else {
         let depth = depth.min(BULLETS.len() - 1);
         let bullet = BULLETS[depth];
@@ -121,5 +116,44 @@ mod tests {
         assert_eq!(list_item_prefix(0, None, false, 2), "▪ ");
         assert_eq!(list_item_prefix(0, None, false, 3), "‣ ");
         assert_eq!(list_item_prefix(0, None, false, 4), "⁃ ");
+    }
+
+    #[test]
+    fn test_list_item_prefix_alphabetic() {
+        for (ordinal, upper, lower) in [
+            (26, "Z. ", "z. "),
+            (27, "AA. ", "aa. "),
+            (28, "AB. ", "ab. "),
+            (52, "AZ. ", "az. "),
+            (53, "BA. ", "ba. "),
+            (702, "ZZ. ", "zz. "),
+            (703, "AAA. ", "aaa. "),
+            (u32::MAX, "MWLQKWU. ", "mwlqkwu. "),
+        ] {
+            for (depth, expected) in [(1, upper), (2, lower), (3, lower)] {
+                for (ix, start) in [
+                    ((ordinal - 1) as usize, None),
+                    ((ordinal - 1) as usize, Some(1)),
+                    (0, Some(ordinal)),
+                    (1, Some(ordinal - 1)),
+                ] {
+                    assert_eq!(list_item_prefix(ix, start, true, depth), expected);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_list_item_prefix_decimal() {
+        for ordinal in [0, 1, 26, 27, 52, 53, 702, 703, u32::MAX] {
+            let expected = format!("{ordinal}. ");
+            assert_eq!(list_item_prefix(0, Some(ordinal), true, 0), expected);
+            for depth in 0..=3 {
+                assert_eq!(
+                    list_item_prefix(ordinal as usize, Some(0), true, depth),
+                    expected
+                );
+            }
+        }
     }
 }
